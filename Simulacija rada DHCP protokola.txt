@@ -1,0 +1,7 @@
+Implemenirati komunikaciju DHCP klijenta sa DHCP serverom radi dinamičkog dobijanja IP adrese prilikom priključenja klijenta datoj mreži. Implementacijom pokriti ključne korake komunikacije putem DHCP protokola:
+1.    DHCP discover – klijent se obraća serveru
+2.    DHCP offer – ponuda servera
+3.    DHCP request – klijent odgovara na ponude i bira jednu od ponuđenih (ako mu je stiglo više) adresa
+4.    DHCP acknowledge – potvrda servera
+Implementiraj i ispobaj da ti rešenje ima 2 DHCP servera: jedan server na IP adresi “127.0.0.1”, a drugi na “INADDR_ANY”. 
+Što se tiče sadržaja aplikacione DHCP poruke, napravi sopstvenu strukturu koja će za početak prenositi samo ključne informacije potrebne za komunikaciju DHCP klijenta i servera. Dakle, slobodno uprosti sadržaj poruke u odnosu na realnu DHCP poruku.
