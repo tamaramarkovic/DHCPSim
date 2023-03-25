@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\UDP%28osnovni%29\ServerINADDR_ANY.cpp">
+    <ClCompile Include="ServerINADDR_ANY.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
