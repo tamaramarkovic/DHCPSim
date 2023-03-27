@@ -113,7 +113,7 @@ int main()
 
     #pragma endregion
     
-    #pragma region DHCP OFFER FROM SERVER
+    #pragma region DHCP OFFER
     struct in_addr client_addr;
 
     //Client receive offer from servers
@@ -163,7 +163,7 @@ int main()
 
         package.siaddr = serverAddress2.sin_addr.s_addr;
 
-        printf("\nYour request for %s address is sent.\n", address1);
+        printf("\nYour request for %s address is sent.\n", address2);
     }
 
     // Send message to server
@@ -173,16 +173,31 @@ int main()
         0,									// No flags
         (SOCKADDR*)&broadcastAddress,		// Address structure of server (type, IP address and port)
         sizeof(broadcastAddress));			// Size of sockadr_in structure
+    #pragma endregion
 
-    // Receive server message
-    iResult = recvfrom(clientSocket,				// Own socket
-        (char*)&package,					// Buffer that will be used for receiving message
-        sizeof(package),					// Maximal size of buffer
-        0,							// No flags
-        (SOCKADDR*)&serverAddress2,	// Client information from received message (ip address and port)
-        &sockAddrLen2);				// Size of sockadd_in structure
+    #pragma region DHCP ACKNOWLEDGE
+
+    if (package.siaddr == serverAddress1.sin_addr.s_addr) {
+        // Receive server message
+        iResult = recvfrom(clientSocket,				// Own socket
+            (char*)&package,					// Buffer that will be used for receiving message
+            sizeof(package),					// Maximal size of buffer
+            0,							// No flags
+            (SOCKADDR*)&serverAddress1,	// Client information from received message (ip address and port)
+            &sockAddrLen1);				// Size of sockadd_in structure
+    }
+    else if (package.siaddr == serverAddress2.sin_addr.s_addr) {
+        // Receive server message
+        iResult = recvfrom(clientSocket,				// Own socket
+            (char*)&package,					// Buffer that will be used for receiving message
+            sizeof(package),					// Maximal size of buffer
+            0,							// No flags
+            (SOCKADDR*)&serverAddress2,	// Client information from received message (ip address and port)
+            &sockAddrLen2);				// Size of sockadd_in structure
+    }
 
     printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+    #pragma endregion
 
     // Check if message is succesfully received
     if (iResult == SOCKET_ERROR)
@@ -192,7 +207,6 @@ int main()
         WSACleanup();
         return 1;
     }
-    #pragma endregion
 
 	// Check if message is succesfully sent. If not, close client application
 	if (iResult == SOCKET_ERROR)
@@ -207,6 +221,27 @@ int main()
 	printf("\nPress any key to exit: ");
 	_getch();
 
+    #pragma region CLIENT SHUT DOWN
+    if (package.siaddr == serverAddress1.sin_addr.s_addr) {
+        // Send message to server
+        iResult = sendto(clientSocket,						// Own socket
+            (char*)&package,						// Text of message
+            sizeof(package),				// Message size
+            0,									// No flags
+            (SOCKADDR*)&serverAddress1,		// Address structure of server (type, IP address and port)
+            sizeof(serverAddress1));			// Size of sockadr_in structure
+    }
+    else if (package.siaddr == serverAddress2.sin_addr.s_addr) {
+        // Send message to server
+        iResult = sendto(clientSocket,						// Own socket
+            (char*)&package,						// Text of message
+            sizeof(package),				// Message size
+            0,									// No flags
+            (SOCKADDR*)&serverAddress2,		// Address structure of server (type, IP address and port)
+            sizeof(serverAddress2));			// Size of sockadr_in structure
+    }
+
+#pragma endregion
 	// Close client application
     iResult = closesocket(clientSocket);
     if (iResult == SOCKET_ERROR)
