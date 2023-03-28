@@ -19,9 +19,17 @@
 #define BUFFER_SIZE 512		// Size of buffer that will be used for sending and receiving messages to clients
 #define NUMBER_OF_ADDRESS_POOL 5
 
+#define LENGHT 312
+#define DHCP_DISCOVER 1
+#define DHCP_OFFER 2
+#define DHCP_REQUEST 3
+#define DHCP_ACKNOWLEDGE 5
+#define DHCP_END 6
+
 typedef struct DHCP_message {
     long ciaddr;
     long siaddr;
+    char options[LENGHT];
 };
 
 typedef struct IPAddress {
@@ -32,6 +40,8 @@ typedef struct IPAddress {
 int main()
 {
     DHCP_message package;
+
+    struct in_addr ip_addr;
 
     const char* addrs[5] = { "192.168.10.6", "192.168.10.7", "192.168.10.8", "192.168.10.9", "192.168.10.10" };
 
@@ -91,6 +101,12 @@ int main()
     }
 
 	printf("Simple UDP server INADDR_ANY started and waiting client messages.\n");
+    
+    //set serverSocket in nonblocking mode 
+    unsigned long  mode = 1;
+    iResult = ioctlsocket(serverSocket, FIONBIO, &mode);
+    if (iResult != 0)
+        printf("ioctlsocket failed with error.");
 
     // Main server loop
     while(1)
@@ -105,7 +121,6 @@ int main()
 		// size of client address
 		int sockAddrLen = sizeof(clientAddress);
 
-    #pragma region DHCP DISCOVER
 		// Receive client message
         iResult = recvfrom(serverSocket,				// Own socket
 			               (char*)&package,					// Buffer that will be used for receiving message
@@ -114,109 +129,114 @@ int main()
 						   (SOCKADDR *)&clientAddress,	// Client information from received message (ip address and port)
 						   &sockAddrLen);				// Size of sockadd_in structure
 
-        // Set end of string
-        dataBuffer[iResult] = '\0';
+        if (iResult != SOCKET_ERROR) {
+            if (package.options[4] == DHCP_DISCOVER || package.options[4] == DHCP_OFFER) {
 
-        char ipAddress[16]; // 15 spaces for decimal notation (for example: "192.168.100.200") + '\0'
+                #pragma region DHCP DISCOVER
+                // Set end of string
+                dataBuffer[iResult] = '\0';
 
-        // Copy client ip to local char[]
-        strcpy_s(ipAddress, sizeof(ipAddress), inet_ntoa(clientAddress.sin_addr));
+                char ipAddress[16]; // 15 spaces for decimal notation (for example: "192.168.100.200") + '\0'
 
-        // Convert port number from network byte order to host byte order
-        unsigned short clientPort = ntohs(clientAddress.sin_port);
+                // Copy client ip to local char[]
+                strcpy_s(ipAddress, sizeof(ipAddress), inet_ntoa(clientAddress.sin_addr));
 
-        printf("\nClient (connected from ip: %s, port: %d) sent DHCP DISCOVER message.\n", ipAddress, clientPort);
+                // Convert port number from network byte order to host byte order
+                unsigned short clientPort = ntohs(clientAddress.sin_port);
 
-    #pragma endregion
+                printf("\nClient (connected from ip: %s, port: %d) sent DHCP DISCOVER message.\n", ipAddress, clientPort);
+                #pragma endregion
 
-    #pragma region DHCP OFFER
+                #pragma region DHCP OFFER
+                for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
+                    if (pool[i].isTaken == false) {
+                        package.ciaddr = pool[i].ciAddr;
+                        break;
+                    }
+                }
 
-        for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
-            if (pool[i].isTaken == false) {
-                package.ciaddr = pool[i].ciAddr;
-                break;
+                // Send message to client
+                iResult = sendto(serverSocket,						// Own socket
+                    (char*)&package,						// Text of message
+                    sizeof(package),				// Message size
+                    0,									// No flags
+                    (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
+                    sizeof(clientAddress));			// Size of sockadr_in structure
+
+                ip_addr.s_addr = package.ciaddr;
+
+                char address[16];
+                strcpy_s(address, inet_ntoa(ip_addr));
+
+                printf("\nYou OFFER this IP address: %s\n", address);
+                #pragma endregion
+            }
+
+            if (package.options[4] == DHCP_REQUEST || package.options[4] == DHCP_ACKNOWLEDGE) {
+
+                #pragma region DHCP REQUEST
+                ip_addr.s_addr = package.ciaddr;
+
+                char addressChoose[16];
+                strcpy_s(addressChoose, inet_ntoa(ip_addr));
+
+                printf("\nClient has chosen this IP address: %s\n", addressChoose);
+                #pragma endregion
+
+                #pragma region DHCP ACK
+                if (package.siaddr == inet_addr("127.0.0.1")) {
+
+                    for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
+                        if (package.ciaddr == pool[i].ciAddr) {
+                            if (pool[i].isTaken == true) {
+                                package.ciaddr = 0;
+                            }
+                            else {
+                                pool[i].isTaken = true;
+                            }
+                            break;
+                        }
+                    }
+
+                    // Send message to client
+                    iResult = sendto(serverSocket,						// Own socket
+                        (char*)&package,						// Text of message
+                        sizeof(package),				// Message size
+                        0,									// No flags
+                        (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
+                        sizeof(clientAddress));			// Size of sockadr_in structure
+
+                    printf("\nIP address is ACKNOWLEDGED and taken..\n");
+                }
+                #pragma endregion
+            }
+
+            if (package.options[4] == DHCP_END) {
+
+                for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
+                    if (package.ciaddr == pool[i].ciAddr && pool[i].isTaken == true) {
+                        pool[i].isTaken = false;
+                        break;
+                    }
+                }
+
+                printf("\nClient has freed address.\n");
             }
         }
-
-        // Send message to client
-        iResult = sendto(serverSocket,						// Own socket
-            (char*)&package,						// Text of message
-            sizeof(package),				// Message size
-            0,									// No flags
-            (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
-            sizeof(clientAddress));			// Size of sockadr_in structure
-
-        struct in_addr ip_addr;
-        ip_addr.s_addr = package.ciaddr;
-
-        char address[16];
-        strcpy_s(address, inet_ntoa(ip_addr));
-
-        printf("\nYou OFFER this IP address: %s\n", address);
-
-    #pragma endregion
-
-    #pragma region DHCP REQUEST
-        // Receive client message
-        iResult = recvfrom(serverSocket,				// Own socket
-            (char*)&package,					// Buffer that will be used for receiving message
-            sizeof(package),					// Maximal size of buffer
-            0,							// No flags
-            (SOCKADDR*)&clientAddress,	// Client information from received message (ip address and port)
-            &sockAddrLen);				// Size of sockadd_in structure
-
-        ip_addr.s_addr = package.ciaddr;
-
-        char addressChoose[16];
-        strcpy_s(addressChoose, inet_ntoa(ip_addr));
-
-        printf("\nClient has chosen this IP address: %s\n", addressChoose);
-    #pragma endregion
-
-    #pragma region DHCP ACK
-        if (package.siaddr == inet_addr("127.0.0.1")) {
-
-            for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
-                if (package.ciaddr == pool[i].ciAddr) {
-                    pool[i].isTaken = true;
-                    break;
-                }
+        else {
+            if (WSAGetLastError() == WSAEWOULDBLOCK)
+            {
+                Sleep(1000);
             }
-
-            // Send message to client
-            iResult = sendto(serverSocket,						// Own socket
-                (char*)&package,						// Text of message
-                sizeof(package),				// Message size
-                0,									// No flags
-                (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
-                sizeof(clientAddress));			// Size of sockadr_in structure
-
-            printf("\nIP address is ACKNOWLEDGED.\n");
-
-            // Receive client message
-            iResult = recvfrom(serverSocket,				// Own socket
-                (char*)&package,					// Buffer that will be used for receiving message
-                sizeof(package),					// Maximal size of buffer
-                0,							// No flags
-                (SOCKADDR*)&clientAddress,	// Client information from received message (ip address and port)
-                &sockAddrLen);				// Size of sockadd_in structure
-
-            for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
-                if (package.ciaddr == pool[i].ciAddr && pool[i].isTaken == true) {
-                    pool[i].isTaken = false;
-                    break;
+            else {
+                // Check if message is succesfully received
+                if (iResult == SOCKET_ERROR)
+                {
+                    printf("recvfrom failed with error: %d\n", WSAGetLastError());
+                    continue;
                 }
             }
         }
-        
-    #pragma endregion
-
-		// Check if message is succesfully received
-		if (iResult == SOCKET_ERROR)
-		{
-			printf("recvfrom failed with error: %d\n", WSAGetLastError());
-			continue;
-		}
 
 		// Possible server-shutdown logic could be put here
     }
