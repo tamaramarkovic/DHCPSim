@@ -26,8 +26,9 @@
 #define DHCP_DISCOVER 1
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
+#define DHCP_DECLINE 4
 #define DHCP_ACKNOWLEDGE 5
-#define DHCP_END 6
+#define DHCP_RELEASE 7
 
 typedef struct DHCP_message {
     long ciaddr;
@@ -107,7 +108,7 @@ int main()
     while (package.ciaddr == 0)
     {
         //DHCP DISCOVER
-        printf("\nDISCOVER Your IP address. (press enter key)\n");
+        printf("\nDISCOVER Your IP address. (press any key)\n");
         _getch();
 
         #pragma region DHCP DISCOVER
@@ -181,7 +182,7 @@ int main()
             else {
                 printf("You must type number");
             }
-        } while (strcmp(dataBuffer, "1") != 0 && strcmp(dataBuffer, "1") != 0);
+        } while (strcmp(dataBuffer, "1") != 0 && strcmp(dataBuffer, "2") != 0);
 
         package.options[4] = DHCP_REQUEST;
 
@@ -204,6 +205,13 @@ int main()
                 0,							// No flags
                 (SOCKADDR*)&serverAddress1,	// Client information from received message (ip address and port)
                 &sockAddrLen1);				// Size of sockadd_in structure
+
+            if (package.options[4] == DHCP_DECLINE) {
+                printf("\nYour request is declined because this IP address is alredy taken.\nPlease send request for address again.\n");
+            }
+            else {
+                printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+            }
         }
         else if (package.siaddr == serverAddress2.sin_addr.s_addr) {
             // Receive server message
@@ -213,9 +221,14 @@ int main()
                 0,							// No flags
                 (SOCKADDR*)&serverAddress2,	// Client information from received message (ip address and port)
                 &sockAddrLen2);				// Size of sockadd_in structure
-        }
 
-        printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+            if (package.options[4] == DHCP_DECLINE) {
+                printf("\nYour request is declined because this IP address is alredy taken.\nPlease send request for address again.\n");
+            }
+            else {
+                printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+            }
+        }
     }
     #pragma endregion
 
@@ -234,7 +247,7 @@ int main()
 
     #pragma region CLIENT SHUT DOWN
     
-    package.options[4] = DHCP_END;
+    package.options[4] = DHCP_RELEASE;
 
     if (package.siaddr == serverAddress1.sin_addr.s_addr) {
         // Send message to server

@@ -18,13 +18,15 @@
 #define DHCP_PORT 67
 #define BUFFER_SIZE 512		// Size of buffer that will be used for sending and receiving messages to clients
 #define NUMBER_OF_ADDRESS_POOL 5
+#define NUMBERS_OF_DNS_SERVERS 3
 
 #define LENGHT 312
 #define DHCP_DISCOVER 1
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
+#define DHCP_DECLINE 4
 #define DHCP_ACKNOWLEDGE 5
-#define DHCP_END 6
+#define DHCP_RELEASE 7
 
 typedef struct DHCP_message {
     long ciaddr;
@@ -42,6 +44,9 @@ int main()
     DHCP_message package;
 
     struct in_addr ip_addr;
+    struct in_addr subnetmask_addr;
+    struct in_addr router_addr;
+    struct in_addr dnsServers_addr[3];
 
     const char* addrs[5] = { "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4", "192.168.10.5" };
 
@@ -50,6 +55,19 @@ int main()
     for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
         pool[i].ciAddr = inet_addr(addrs[i]);
         pool[i].isTaken = false;
+    }
+
+    long dnsAddressesLong[3];
+
+    const char* subnetmaska = "255.255.255.0";
+    long subnetmaskaLong = inet_addr(subnetmaska);
+
+    const char* ruter = "192.168.1.1";
+    long ruterLong = inet_addr(ruter);
+
+    const char* dnsServers[3] = { "9.7.10.15" , "9.7.10.16" , "9.7.10.18" };
+    for (int i = 0; i < NUMBERS_OF_DNS_SERVERS; i++) {
+        dnsAddressesLong[i] = inet_addr(dnsServers[i]);
     }
 
     // Server address
@@ -148,12 +166,22 @@ int main()
                 #pragma endregion
 
                 #pragma region DHCP OFFER
-                for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
-                    if (pool[i].isTaken == false) {
-                        package.ciaddr = pool[i].ciAddr;
-                        break;
-                    }
+
+                //for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
+                //    if (pool[i].isTaken == false) {
+                //        package.ciaddr = pool[i].ciAddr;
+                //        break;
+                //    }
+                //}
+
+                int random = rand() % 5;
+
+                while (pool[random].isTaken) {
+                    random = rand() % 5;
                 }
+
+                package.ciaddr = pool[random].ciAddr;
+             
 
                 // Send message to client
                 iResult = sendto(serverSocket,						// Own socket
@@ -168,7 +196,29 @@ int main()
                 char address[16];
                 strcpy_s(address, inet_ntoa(ip_addr));
 
+                subnetmask_addr.s_addr = subnetmaskaLong;
+
+                char subnetMaska[50];
+                strcpy_s(subnetMaska, inet_ntoa(subnetmask_addr));
+
+                router_addr.s_addr = ruterLong;
+
+                char router[50];
+                strcpy_s(router, inet_ntoa(router_addr));
+
                 printf("\nYou OFFER this IP address: %s\n", address);
+
+                printf("\Other information are:\n\t 1. Subnetmask: %s\n\t 2. Router: %s\n\t 3. DNS servers: ", subnetMaska, router);
+
+                char dnsServer[50];
+
+                for (int i = 0; i < NUMBERS_OF_DNS_SERVERS; i++)
+                {
+                    dnsServers_addr[i].s_addr = dnsAddressesLong[i];
+                    strcpy_s(dnsServer, inet_ntoa(dnsServers_addr[i]));
+
+                    printf("%s ", dnsServer);
+                }
                 #pragma endregion
             }
 
@@ -180,7 +230,7 @@ int main()
                 char addressChoose[16];
                 strcpy_s(addressChoose, inet_ntoa(ip_addr));
 
-                printf("\nClient has chosen this IP address: %s\n", addressChoose);
+                printf("\n\nClient has chosen this IP address: %s\n", addressChoose);
                 #pragma endregion
 
                 #pragma region DHCP ACK
@@ -189,29 +239,42 @@ int main()
                     for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
                         if (package.ciaddr == pool[i].ciAddr) {
                             if (pool[i].isTaken == true) {
+
+                                package.options[4] = DHCP_DECLINE;
+
                                 package.ciaddr = 0;
+
+                                // Send message to client
+                                iResult = sendto(serverSocket,						// Own socket
+                                    (char*)&package,						// Text of message
+                                    sizeof(package),				// Message size
+                                    0,									// No flags
+                                    (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
+                                    sizeof(clientAddress));			// Size of sockadr_in structure
+
+                                printf("\nIP address is DECLINED. Client request address again.\n");
                             }
                             else {
                                 pool[i].isTaken = true;
+
+                                // Send message to client
+                                iResult = sendto(serverSocket,						// Own socket
+                                    (char*)&package,						// Text of message
+                                    sizeof(package),				// Message size
+                                    0,									// No flags
+                                    (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
+                                    sizeof(clientAddress));			// Size of sockadr_in structure
+
+                                printf("\nIP address is ACKNOWLEDGED and taken.\n");
                             }
                             break;
                         }
                     }
-
-                    // Send message to client
-                    iResult = sendto(serverSocket,						// Own socket
-                        (char*)&package,						// Text of message
-                        sizeof(package),				// Message size
-                        0,									// No flags
-                        (SOCKADDR*)&clientAddress,		// Address structure of server (type, IP address and port)
-                        sizeof(clientAddress));			// Size of sockadr_in structure
-
-                    printf("\nIP address is ACKNOWLEDGED and taken.\n");
                 }
                 #pragma endregion
             }
             
-            if (package.options[4] == DHCP_END) {
+            if (package.options[4] == DHCP_RELEASE) {
 
                 for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
                     if (package.ciaddr == pool[i].ciAddr && pool[i].isTaken == true) {
