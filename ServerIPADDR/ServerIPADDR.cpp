@@ -20,7 +20,7 @@
 #define NUMBER_OF_ADDRESS_POOL 5
 #define NUMBERS_OF_DNS_SERVERS 3
 
-#define LENGHT 312
+#define LENGHT 50
 #define DHCP_DISCOVER 1
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
@@ -32,6 +32,9 @@ typedef struct DHCP_message {
     long ciaddr;
     long siaddr;
     char options[LENGHT];
+    long submas;
+    long rout;
+    long dnss;
 };
 
 typedef struct IPAddress {
@@ -46,7 +49,7 @@ int main()
     struct in_addr ip_addr;
     struct in_addr subnetmask_addr;
     struct in_addr router_addr;
-    struct in_addr dnsServers_addr[3];
+    struct in_addr dnsServer_addr;
 
     const char* addrs[5] = { "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4", "192.168.10.5" };
 
@@ -57,18 +60,14 @@ int main()
         pool[i].isTaken = false;
     }
 
-    long dnsAddressesLong[3];
-
     const char* subnetmaska = "255.255.255.0";
     long subnetmaskaLong = inet_addr(subnetmaska);
 
-    const char* ruter = "192.168.1.1";
-    long ruterLong = inet_addr(ruter);
+    const char* ruter = "192.168.1.2";
+    long routerLong = inet_addr(ruter);
 
-    const char* dnsServers[3] = { "9.7.10.15" , "9.7.10.16" , "9.7.10.18" };
-    for (int i = 0; i < NUMBERS_OF_DNS_SERVERS; i++) {
-        dnsAddressesLong[i] = inet_addr(dnsServers[i]);
-    }
+    const char* dnsServer = "9.7.10.16";
+    long dnsAddressesLong = inet_addr(dnsServer);
 
     // Server address
     sockaddr_in serverAddress;
@@ -148,7 +147,7 @@ int main()
 						   &sockAddrLen);				// Size of sockadd_in structure
     
         if (iResult != SOCKET_ERROR) {
-            if (package.options[4] == DHCP_DISCOVER || package.options[4] == DHCP_OFFER) {
+            if (package.options[3] == DHCP_DISCOVER || package.options[3] == DHCP_OFFER) {
 
                 #pragma region DHCP DISCOVER
                 // Set end of string
@@ -162,17 +161,10 @@ int main()
                 // Convert port number from network byte order to host byte order
                 unsigned short clientPort = ntohs(clientAddress.sin_port);
 
-                printf("\nClient (connected from ip: %s, port: %d) sent DHCP DISCOVER message.\n", ipAddress, clientPort);
+                printf("\nClient (connected from ip: %s, port: %d) sent DISCOVER message.\n", ipAddress, clientPort);
                 #pragma endregion
 
                 #pragma region DHCP OFFER
-
-                //for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
-                //    if (pool[i].isTaken == false) {
-                //        package.ciaddr = pool[i].ciAddr;
-                //        break;
-                //    }
-                //}
 
                 int random = rand() % 5;
 
@@ -181,8 +173,10 @@ int main()
                 }
 
                 package.ciaddr = pool[random].ciAddr;
+                package.submas = subnetmaskaLong;
+                package.rout = routerLong;
+                package.dnss = dnsAddressesLong;
              
-
                 // Send message to client
                 iResult = sendto(serverSocket,						// Own socket
                     (char*)&package,						// Text of message
@@ -192,37 +186,29 @@ int main()
                     sizeof(clientAddress));			// Size of sockadr_in structure
 
                 ip_addr.s_addr = package.ciaddr;
-
                 char address[16];
                 strcpy_s(address, inet_ntoa(ip_addr));
 
                 subnetmask_addr.s_addr = subnetmaskaLong;
+                char subnetmask[16];
+                strcpy_s(subnetmask, inet_ntoa(subnetmask_addr));
 
-                char subnetMaska[50];
-                strcpy_s(subnetMaska, inet_ntoa(subnetmask_addr));
-
-                router_addr.s_addr = ruterLong;
-
-                char router[50];
+                router_addr.s_addr = routerLong;
+                char router[16];
                 strcpy_s(router, inet_ntoa(router_addr));
+
+                dnsServer_addr.s_addr = dnsAddressesLong;
+                char dnsServer[16];
+                strcpy_s(dnsServer, inet_ntoa(dnsServer_addr));
 
                 printf("\nYou OFFER this IP address: %s\n", address);
 
-                printf("\Other information are:\n\t 1. Subnetmask: %s\n\t 2. Router: %s\n\t 3. DNS servers: ", subnetMaska, router);
-
-                char dnsServer[50];
-
-                for (int i = 0; i < NUMBERS_OF_DNS_SERVERS; i++)
-                {
-                    dnsServers_addr[i].s_addr = dnsAddressesLong[i];
-                    strcpy_s(dnsServer, inet_ntoa(dnsServers_addr[i]));
-
-                    printf("%s ", dnsServer);
-                }
+                printf("\Other information are:\n\t 1. Subnetmask: %s\n\t 2. Router: %s\n\t 3. DNS servers: %s\n",
+                    subnetmask, router, dnsServer);
                 #pragma endregion
             }
 
-            if (package.options[4] == DHCP_REQUEST || package.options[4] == DHCP_ACKNOWLEDGE) {
+            if (package.options[3] == DHCP_REQUEST || package.options[3] == DHCP_ACKNOWLEDGE) {
                 #pragma region DHCP REQUEST
 
                 ip_addr.s_addr = package.ciaddr;
@@ -240,7 +226,7 @@ int main()
                         if (package.ciaddr == pool[i].ciAddr) {
                             if (pool[i].isTaken == true) {
 
-                                package.options[4] = DHCP_DECLINE;
+                                package.options[3] = DHCP_DECLINE;
 
                                 package.ciaddr = 0;
 
@@ -274,7 +260,7 @@ int main()
                 #pragma endregion
             }
             
-            if (package.options[4] == DHCP_RELEASE) {
+            if (package.options[3] == DHCP_RELEASE) {
 
                 for (int i = 0; i < NUMBER_OF_ADDRESS_POOL; i++) {
                     if (package.ciaddr == pool[i].ciAddr && pool[i].isTaken == true) {

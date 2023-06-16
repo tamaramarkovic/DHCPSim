@@ -22,7 +22,7 @@
 #define DHCP_LOCAL_BROADCASTADDRESS "127.255.255.255"
 #define BUFFER_SIZE 512						// Size of buffer that will be used for sending and receiving messages to client
 
-#define LENGHT 312
+#define LENGHT 50
 #define DHCP_DISCOVER 1
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
@@ -34,11 +34,18 @@ typedef struct DHCP_message {
     long ciaddr;
     long siaddr;
     char options[LENGHT];
+    long submas;
+    long rout;
+    long dnss;
 };
 
 int main()
 {
     DHCP_message package;
+
+    struct in_addr subnetmask_addr;
+    struct in_addr router_addr;
+    struct in_addr dnsServer_addr;
 
     // Server address structure
     sockaddr_in serverAddress1;
@@ -112,7 +119,7 @@ int main()
         _getch();
 
         #pragma region DHCP DISCOVER
-        package.options[4] = DHCP_DISCOVER;
+        package.options[3] = DHCP_DISCOVER;
 
         //client send message to all servers
         // Send message to server
@@ -138,7 +145,6 @@ int main()
             &sockAddrLen1);				// Size of sockadd_in structure
 
         client_addr.s_addr = package.ciaddr;
-
         char address1 [16];
         strcpy_s(address1, inet_ntoa(client_addr));
 
@@ -151,7 +157,6 @@ int main()
             &sockAddrLen2);				// Size of sockadd_in structure
 
         client_addr.s_addr = package.ciaddr;
-
         char address2 [16];
         strcpy_s(address2, inet_ntoa(client_addr));
         #pragma endregion
@@ -180,11 +185,11 @@ int main()
                 printf("\nYour REQUEST for %s address is sent.\n", address2);
             }
             else {
-                printf("You must type number");
+                printf("You must type number! - ");
             }
         } while (strcmp(dataBuffer, "1") != 0 && strcmp(dataBuffer, "2") != 0);
 
-        package.options[4] = DHCP_REQUEST;
+        package.options[3] = DHCP_REQUEST;
 
         // Send message to server
         iResult = sendto(clientSocket,						// Own socket
@@ -206,11 +211,28 @@ int main()
                 (SOCKADDR*)&serverAddress1,	// Client information from received message (ip address and port)
                 &sockAddrLen1);				// Size of sockadd_in structure
 
-            if (package.options[4] == DHCP_DECLINE) {
-                printf("\nYour request is declined because this IP address is alredy taken.\nPlease send request for address again.\n");
+            if (package.options[3] == DHCP_DECLINE) {
+                printf("\nYour request is declined because this IP address is alredy taken.");
+                printf("\nPlease send request for address again.\n");
             }
             else {
+                
+                subnetmask_addr.s_addr = package.submas;
+                char submask[16];
+                strcpy_s(submask, inet_ntoa(subnetmask_addr));
+
+                router_addr.s_addr = package.rout;
+                char router[16];
+                strcpy_s(router, inet_ntoa(router_addr));
+
+                dnsServer_addr.s_addr = package.dnss;
+                char dnsServer[16];
+                strcpy_s(dnsServer, inet_ntoa(dnsServer_addr));
+
                 printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+
+                printf("Other information are:\n\t 1. Subnetmask: %s\n\t 2. Router: %s\n\t 3. DNS Server: %s\n",
+                    submask, router, dnsServer);
             }
         }
         else if (package.siaddr == serverAddress2.sin_addr.s_addr) {
@@ -222,11 +244,28 @@ int main()
                 (SOCKADDR*)&serverAddress2,	// Client information from received message (ip address and port)
                 &sockAddrLen2);				// Size of sockadd_in structure
 
-            if (package.options[4] == DHCP_DECLINE) {
-                printf("\nYour request is declined because this IP address is alredy taken.\nPlease send request for address again.\n");
+            if (package.options[3] == DHCP_DECLINE) {
+                printf("\nYour request is declined because this IP address is alredy taken.");
+                printf("\nPlease send request for address again.\n");
             }
             else {
+
+                subnetmask_addr.s_addr = package.submas;
+                char submask[16];
+                strcpy_s(submask, inet_ntoa(subnetmask_addr));
+
+                router_addr.s_addr = package.rout;
+                char router[16];
+                strcpy_s(router, inet_ntoa(router_addr));
+
+                dnsServer_addr.s_addr = package.dnss;
+                char dnsServer[16];
+                strcpy_s(dnsServer, inet_ntoa(dnsServer_addr));
+
                 printf("\nServer has ACKNOWLEDGED Your IP address.\n");
+
+                printf("Other information are:\n\t 1. Subnetmask: %s\n\t 2. Router: %s\n\t 3. DNS Server: %s\n", 
+                    submask, router, dnsServer);
             }
         }
     }
@@ -247,7 +286,7 @@ int main()
 
     #pragma region CLIENT SHUT DOWN
     
-    package.options[4] = DHCP_RELEASE;
+    package.options[3] = DHCP_RELEASE;
 
     if (package.siaddr == serverAddress1.sin_addr.s_addr) {
         // Send message to server
